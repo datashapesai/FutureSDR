@@ -1,5 +1,5 @@
-use futuresdr::anyhow::Result;
 use futuresdr::blocks::seify::Capabilities;
+use futuresdr::runtime::Result;
 use futuresdr_types::Pmt;
 use seify::Range;
 use seify::RangeItem;
