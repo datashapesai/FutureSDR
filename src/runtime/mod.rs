@@ -251,6 +251,9 @@ pub enum Error {
     /// PMT Conversion Error
     #[error("PMT conversion error")]
     PmtConversionError,
+    /// PMT Conversion Error
+    #[error("PMT value error: {0}")]
+    PmtValueError(String),
     /// Seify Args Conversion Error
     #[error("Seify Args conversion error")]
     SeifyArgsConversionError,
