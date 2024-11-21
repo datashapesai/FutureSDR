@@ -1,5 +1,5 @@
-use crate::anyhow::Error;
-use crate::anyhow::Result;
+use crate::runtime::Error;
+use crate::runtime::Result;
 use anyhow::Context;
 use futuresdr_types::Pmt;
 use seify::Device;
@@ -98,12 +98,12 @@ impl<'a> TryFrom<Conv<'a, Pmt>> for Range {
                             }
                         }
                         Pmt::F64(v) => Ok(RangeItem::Value(*v)),
-                        _ => Err(Error::msg("unexpected pmt type")),
+                        _ => Err(anyhow::Error::msg("unexpected pmt type")),
                     })
                     .collect::<Result<Vec<RangeItem>>>()?;
                 Ok(Range { items })
             }
-            o => Err(Error::msg(format!("unexpected Pmt value: {:?}", o))),
+            o => Err(anyhow::Error::msg(format!("unexpected Pmt value: {:?}", o))),
         }
     }
 }
@@ -161,7 +161,7 @@ impl TryFrom<&Pmt> for Capabilities {
                                     if let Pmt::String(s) = v {
                                         Ok(s.to_string())
                                     } else {
-                                        Err(Error::msg("unexpected pmt type"))
+                                        Err(anyhow::Error::msg("unexpected pmt type"))
                                     }
                                 })
                                 .collect::<Result<Vec<String>>>()
@@ -189,7 +189,7 @@ impl TryFrom<&Pmt> for Capabilities {
                     supports_agc,
                 })
             }
-            o => Err(Error::msg(format!("unexpected Pmt value: {:?}", o))),
+            o => Err(anyhow::Error::msg(format!("unexpected Pmt value: {:?}", o))),
         }
     }
 }
