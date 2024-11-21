@@ -1,6 +1,5 @@
 use crate::runtime::Error;
 use crate::runtime::Result;
-use anyhow::Context;
 use futuresdr_types::Pmt;
 use seify::Device;
 use seify::DeviceTrait;
@@ -74,7 +73,7 @@ impl<'a> From<Conv<'a, Range>> for Pmt {
 }
 
 impl<'a> TryFrom<Conv<'a, Pmt>> for Range {
-    type Error = Error;
+    type Error = anyhow::Error;
 
     fn try_from(value: Conv<'a, Pmt>) -> Result<Self> {
         match value.0 {
@@ -83,27 +82,28 @@ impl<'a> TryFrom<Conv<'a, Pmt>> for Range {
                     .iter()
                     .map(|x| match x {
                         Pmt::MapStrPmt(m) => {
-                            let min: f64 =
-                                m.get("min").context("missing min")?.to_owned().try_into()?;
-                            let max = m.get("max").context("missing max")?.to_owned().try_into()?;
+                            let min: f64 = m
+                                .get("min")
+                                .ok_or(Error::PmtValueError("missing 'min'".into()))?
+                                .try_into()?;
+                            let max: f64 = m
+                                .get("max")
+                                .ok_or(Error::PmtValueError("missing 'max'".into()))?
+                                .try_into()?;
                             let step = m.get("step");
                             if let Some(step) = step {
-                                Ok(RangeItem::Step(
-                                    min,
-                                    max,
-                                    step.to_owned().try_into().context("step not f64")?,
-                                ))
+                                Ok(RangeItem::Step(min, max, step.to_owned().try_into()?))
                             } else {
                                 Ok(RangeItem::Interval(min, max))
                             }
                         }
                         Pmt::F64(v) => Ok(RangeItem::Value(*v)),
-                        _ => Err(anyhow::Error::msg("unexpected pmt type")),
+                        _ => Err(Error::PmtValueError("unexpected pmt type".into())),
                     })
-                    .collect::<Result<Vec<RangeItem>>>()?;
+                    .collect::<Result<Vec<RangeItem>, Error>>()?;
                 Ok(Range { items })
             }
-            o => Err(anyhow::Error::msg(format!("unexpected Pmt value: {:?}", o))),
+            o => Err(anyhow::Error::msg(format!("unexpected Pmt value: {:?}", o)).into()),
         }
     }
 }
@@ -139,7 +139,7 @@ impl From<&Capabilities> for Pmt {
 }
 
 impl TryFrom<&Pmt> for Capabilities {
-    type Error = Error;
+    type Error = anyhow::Error;
 
     fn try_from(value: &Pmt) -> Result<Self> {
         match value {
@@ -189,14 +189,14 @@ impl TryFrom<&Pmt> for Capabilities {
                     supports_agc,
                 })
             }
-            o => Err(anyhow::Error::msg(format!("unexpected Pmt value: {:?}", o))),
+            o => Err(Error::PmtValueError(format!("unexpected Pmt value: {o:?}")).into()),
         }
     }
 }
 
 impl TryFrom<Pmt> for Capabilities {
-    type Error = Error;
-    fn try_from(value: Pmt) -> Result<Self> {
+    type Error = anyhow::Error;
+    fn try_from(value: Pmt) -> Result<Self, Self::Error> {
         (&value).try_into()
     }
 }
