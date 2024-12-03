@@ -5,7 +5,6 @@ use seify::Device;
 use seify::DeviceTrait;
 use seify::Direction;
 use seify::Range;
-use seify::RangeItem;
 use std::collections::HashMap;
 
 /// Record describing the reported capabilities of a seify [`Device`].
@@ -45,81 +44,18 @@ impl Capabilities {
     }
 }
 
-/// Newtype to assist in converting between a seify [`Range`] and [`Pmt`].
-struct Conv<'a, T>(&'a T);
-
-impl<'a> From<Conv<'a, Range>> for Pmt {
-    fn from(range: Conv<'a, Range>) -> Self {
-        Pmt::VecPmt(
-            range
-                .0
-                .items
-                .iter()
-                .map(|x| match x {
-                    RangeItem::Interval(min, max) => Pmt::MapStrPmt(HashMap::from([
-                        ("min".to_owned(), Pmt::F64(*min)),
-                        ("max".to_owned(), Pmt::F64(*max)),
-                    ])),
-                    RangeItem::Value(v) => Pmt::F64(*v),
-                    RangeItem::Step(min, max, step) => Pmt::MapStrPmt(HashMap::from([
-                        ("min".to_owned(), Pmt::F64(*min)),
-                        ("max".to_owned(), Pmt::F64(*max)),
-                        ("step".to_owned(), Pmt::F64(*step)),
-                    ])),
-                })
-                .collect(),
-        )
-    }
-}
-
-impl<'a> TryFrom<Conv<'a, Pmt>> for Range {
-    type Error = anyhow::Error;
-
-    fn try_from(value: Conv<'a, Pmt>) -> Result<Self> {
-        match value.0 {
-            Pmt::VecPmt(v) => {
-                let items = v
-                    .iter()
-                    .map(|x| match x {
-                        Pmt::MapStrPmt(m) => {
-                            let min: f64 = m
-                                .get("min")
-                                .ok_or(Error::PmtValueError("missing 'min'".into()))?
-                                .try_into()?;
-                            let max: f64 = m
-                                .get("max")
-                                .ok_or(Error::PmtValueError("missing 'max'".into()))?
-                                .try_into()?;
-                            let step = m.get("step");
-                            if let Some(step) = step {
-                                Ok(RangeItem::Step(min, max, step.to_owned().try_into()?))
-                            } else {
-                                Ok(RangeItem::Interval(min, max))
-                            }
-                        }
-                        Pmt::F64(v) => Ok(RangeItem::Value(*v)),
-                        _ => Err(Error::PmtValueError("unexpected pmt type".into())),
-                    })
-                    .collect::<Result<Vec<RangeItem>, Error>>()?;
-                Ok(Range { items })
-            }
-            o => Err(anyhow::Error::msg(format!("unexpected Pmt value: {:?}", o)).into()),
-        }
-    }
-}
-
 impl From<&Capabilities> for Pmt {
     fn from(value: &Capabilities) -> Self {
         let mut m = HashMap::new();
 
         if let Some(r) = &value.frequency_range {
-            m.insert("frequency_range".to_owned(), Conv(r).into());
+            m.insert("frequency_range".to_owned(), r.into());
         }
         if let Some(r) = &value.sample_rate_range {
-            m.insert("sample_rate_range".to_owned(), Conv(r).into());
+            m.insert("sample_rate_range".to_owned(), r.into());
         }
         if let Some(r) = &value.bandwidth_range {
-            m.insert("bandwidth_range".to_owned(), Conv(r).into());
+            m.insert("bandwidth_range".to_owned(), r.into());
         }
         if let Some(v) = &value.antennas {
             m.insert(
@@ -128,7 +64,7 @@ impl From<&Capabilities> for Pmt {
             );
         }
         if let Some(r) = &value.gain_range {
-            m.insert("gain_range".to_owned(), Conv(r).into());
+            m.insert("gain_range".to_owned(), r.into());
         }
         if let Some(v) = &value.supports_agc {
             m.insert("supports_agc".to_owned(), Pmt::Bool(*v));
@@ -144,15 +80,9 @@ impl TryFrom<&Pmt> for Capabilities {
     fn try_from(value: &Pmt) -> Result<Self> {
         match value {
             Pmt::MapStrPmt(m) => {
-                let frequency_range = m
-                    .get("frequency_range")
-                    .and_then(|v| Conv(v).try_into().ok());
-                let sample_rate_range = m
-                    .get("sample_rate_range")
-                    .and_then(|v| Conv(v).try_into().ok());
-                let bandwidth_range = m
-                    .get("bandwidth_range")
-                    .and_then(|v| Conv(v).try_into().ok());
+                let frequency_range = m.get("frequency_range").and_then(|v| v.try_into().ok());
+                let sample_rate_range = m.get("sample_rate_range").and_then(|v| v.try_into().ok());
+                let bandwidth_range = m.get("bandwidth_range").and_then(|v| v.try_into().ok());
                 let antennas = m.get("antennas").and_then(|v| {
                     if let Pmt::VecPmt(v) = v {
                         Some(
@@ -171,7 +101,7 @@ impl TryFrom<&Pmt> for Capabilities {
                         None
                     }
                 });
-                let gain_range = m.get("gain_range").and_then(|v| Conv(v).try_into().ok());
+                let gain_range = m.get("gain_range").and_then(|v| v.try_into().ok());
                 let supports_agc = m.get("supports_agc").and_then(|v| {
                     if let Pmt::Bool(v) = v {
                         Some(*v)
