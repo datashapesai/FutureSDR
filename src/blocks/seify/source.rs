@@ -7,6 +7,7 @@ use seify::RxStreamer;
 use std::time::Duration;
 
 use crate::blocks::seify::builder::BuilderType;
+use crate::blocks::seify::capabilities::Capabilities;
 use crate::blocks::seify::Builder;
 use crate::blocks::seify::Config;
 use crate::num_complex::Complex32;
@@ -37,6 +38,7 @@ use crate::runtime::WorkIo;
 ///     - `"cmd"`: `Pmt` encoded `Config` to apply to all channels at once
 ///     - `"terminate"`: `Pmt::Ok` to terminate the block
 ///     - `"config"`: `u32`, `u64`, `usize` (channel id) returns the `Config` for the specified channel as a `Pmt::MapStrPmt`
+///     - `"capabilities"`: `u32`, `u64`, `usize` (channel id) returns the for the specified channel as a `Pmt::MapStrPmt`
 /// * Message outputs: None
 pub struct Source<D: DeviceTrait + Clone> {
     channels: Vec<usize>,
@@ -73,6 +75,7 @@ impl<D: DeviceTrait + Clone> Source<D> {
                 .add_input("cmd", Self::cmd_handler)
                 .add_input("terminate", Self::terminate_handler)
                 .add_input("config", Self::get_config_handler)
+                .add_input("capabilities", Self::capabilities_handler)
                 .build(),
             Source {
                 channels,
@@ -197,6 +200,27 @@ impl<D: DeviceTrait + Clone> Source<D> {
             return Ok(Pmt::InvalidValue);
         }
         Ok(Config::from(&self.dev, Rx, id)?.to_serializable_pmt())
+    }
+
+    #[message_handler]
+    fn capabilities_handler(
+        &mut self,
+        _io: &mut WorkIo,
+        _mio: &mut MessageIo<Self>,
+        _meta: &mut BlockMeta,
+        channel_id: Pmt,
+    ) -> Result<Pmt> {
+        let id: usize = match channel_id {
+            Pmt::Null | Pmt::Ok => 0,
+            Pmt::U32(id) => id as usize,
+            Pmt::U64(id) => id as usize,
+            Pmt::Usize(id) => id,
+            _ => return Ok(Pmt::InvalidValue),
+        };
+        if id >= self.channels.len() {
+            return Ok(Pmt::InvalidValue);
+        }
+        Ok(Pmt::from(&Capabilities::try_from(&self.dev, Rx, id)?))
     }
 }
 

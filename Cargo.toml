@@ -74,6 +74,10 @@ required-features = ["tpb_scheduler"]
 name = "seify"
 required-features = ["seify_dummy"]
 
+[[test]]
+name = "capabilities"
+required-features = ["seify", "soapy"]
+
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
