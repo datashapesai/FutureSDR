@@ -158,6 +158,10 @@ impl Scheduler for SmolScheduler {
             .unwrap()
             .spawn(blocking::unblock(|| async_io::block_on(future)))
     }
+
+    fn executor(&self) -> Option<Arc<Executor<'static>>> {
+        SMOL.lock().unwrap().get(self.inner.id).cloned()
+    }
 }
 
 impl Default for SmolScheduler {

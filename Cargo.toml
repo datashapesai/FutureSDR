@@ -131,6 +131,7 @@ cpal = { version = "0.15", optional = true }
 hound = { version = "3.5", optional = true }
 libc = "0.2"
 rodio = { version = "0.19", default-features = false, features = ["symphonia-all"], optional = true }
+smol-axum = "0.1.0"
 tokio = { version = "1", features = ["rt"] }
 tower-http = { version = "0.6", features = ["add-extension", "cors", "fs"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

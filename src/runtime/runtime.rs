@@ -1,3 +1,4 @@
+use async_executor::Executor;
 #[cfg(not(target_arch = "wasm32"))]
 use async_io::block_on;
 #[cfg(not(target_arch = "wasm32"))]
@@ -87,6 +88,7 @@ impl Runtime<'_, SmolScheduler> {
         let handle = RuntimeHandle {
             flowgraphs: flowgraphs.clone(),
             scheduler: Arc::new(scheduler.clone()),
+            executor: scheduler.executor(),
         };
         Runtime {
             scheduler,
@@ -148,6 +150,7 @@ impl<'a, S: Scheduler + Sync> Runtime<'a, S> {
         let handle = RuntimeHandle {
             flowgraphs: flowgraphs.clone(),
             scheduler: Arc::new(scheduler.clone()),
+            executor: None,
         };
         Runtime {
             scheduler,
@@ -263,6 +266,7 @@ impl<'a, S: Scheduler + Sync> Runtime<'a, S> {
         RuntimeHandle {
             flowgraphs: self.flowgraphs.clone(),
             scheduler: Arc::new(self.scheduler.clone()),
+            executor: None,
         }
     }
 }
@@ -304,6 +308,7 @@ impl<S: Scheduler + Sync + 'static> Spawn for S {
 pub struct RuntimeHandle {
     scheduler: Arc<dyn Spawn + Send + Sync + 'static>,
     flowgraphs: Arc<Mutex<Slab<FlowgraphHandle>>>,
+    executor: Option<Arc<Executor<'static>>>,
 }
 
 impl fmt::Debug for RuntimeHandle {
@@ -348,6 +353,11 @@ impl RuntimeHandle {
             .iter()
             .map(|x| x.0)
             .collect()
+    }
+
+    /// Get a reference to the underlying executor, if available in the current runtime.
+    pub fn executor(&self) -> Option<Arc<Executor<'static>>> {
+        self.executor.clone()
     }
 }
 

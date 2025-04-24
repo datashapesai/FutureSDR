@@ -1,4 +1,5 @@
 //! Remote Control through REST API
+use async_io::Async;
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -10,9 +11,10 @@ use axum::routing::get_service;
 use axum::Json;
 use axum::Router;
 use futures::channel::oneshot;
+use std::net::TcpListener as StdTcpListener;
 use std::path;
 use std::thread::JoinHandle;
-use tokio::net::TcpListener;
+use tokio::net::TcpListener as TokioTcpListener;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
@@ -159,32 +161,46 @@ impl ControlPort {
             app = app.fallback_service(get_service(service));
         }
 
-        let (tx_shutdown, rx_shutdown) = oneshot::channel::<()>();
+        let addr = config::config().ctrlport_bind.unwrap();
 
-        let handle = std::thread::spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap();
+        if let Some(executor) = self.handle.executor() {
+            // Run Axum within an existing executor
+            if let Ok(listener) = Async::<StdTcpListener>::bind(addr) {
+                debug!("Listening on {}", addr);
+                executor
+                    .spawn(smol_axum::serve(executor.clone(), listener, app))
+                    .detach();
+            } else {
+                warn!("CtrlPort address {} already in use", addr);
+            }
+        } else {
+            // Run Axum within an isolated Tokio runtime
+            let (tx_shutdown, rx_shutdown) = oneshot::channel::<()>();
 
-            runtime.spawn(async move {
-                let addr = config::config().ctrlport_bind.unwrap();
-                if let Ok(listener) = TcpListener::bind(&addr).await {
-                    debug!("Listening on {}", addr);
-                    axum::serve(listener, app.into_make_service())
-                        .await
-                        .unwrap();
-                } else {
-                    warn!("CtrlPort address {} already in use", addr);
-                }
+            let handle = std::thread::spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
+
+                runtime.spawn(async move {
+                    if let Ok(listener) = TokioTcpListener::bind(&addr).await {
+                        debug!("Listening on {}", addr);
+                        axum::serve(listener, app.into_make_service())
+                            .await
+                            .unwrap();
+                    } else {
+                        warn!("CtrlPort address {} already in use", addr);
+                    }
+                });
+
+                runtime.block_on(async move {
+                    let _ = rx_shutdown.await;
+                });
             });
 
-            runtime.block_on(async move {
-                let _ = rx_shutdown.await;
-            });
-        });
-
-        self.thread = Some((tx_shutdown, handle));
+            self.thread = Some((tx_shutdown, handle));
+        }
     }
 }
 

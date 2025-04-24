@@ -1,6 +1,8 @@
+use async_executor::Executor;
 use futures::channel::mpsc::Sender;
 use futures::future::Future;
 use slab::Slab;
+use std::sync::Arc;
 
 use crate::runtime::scheduler::Task;
 use crate::runtime::BlockMessage;
@@ -29,6 +31,11 @@ pub trait Scheduler: Clone + Send + 'static {
         &self,
         future: impl Future<Output = T> + Send + 'static,
     ) -> Task<T>;
+
+    /// Get the executor behind the scheduler, if supported
+    fn executor(&self) -> Option<Arc<Executor<'static>>> {
+        None
+    }
 }
 
 /// Scheduler trait

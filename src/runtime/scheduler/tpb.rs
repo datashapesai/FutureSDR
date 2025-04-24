@@ -135,6 +135,10 @@ impl Scheduler for TpbScheduler {
             .unwrap()
             .spawn(blocking::unblock(|| async_io::block_on(future)))
     }
+
+    fn executor(&self) -> Option<Arc<Executor<'static>>> {
+        TPB.lock().unwrap().get(self.inner.id).cloned()
+    }
 }
 
 impl Default for TpbScheduler {
