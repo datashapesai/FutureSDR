@@ -161,7 +161,14 @@ impl ControlPort {
 
         let (tx_shutdown, rx_shutdown) = oneshot::channel::<()>();
 
+
         let handle = std::thread::spawn(move || {
+            let cores = core_affinity::get_core_ids().unwrap_or_default();
+            if let Some(core) = cores.last() {
+                debug!("Pinning Axum to core {}", core.id);
+                core_affinity::set_for_current(*core);
+            }
+
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
