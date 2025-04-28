@@ -180,6 +180,7 @@ impl<T: Kernel + Send + 'static> TypedBlock<T> {
         }
     }
 
+    #[tracing::instrument(skip_all, fields(port_id = %id))]
     async fn call_handler(
         io: &mut WorkIo,
         mio: &mut MessageIo<T>,
@@ -217,6 +218,7 @@ impl<T: Kernel + Send + 'static> TypedBlock<T> {
         f.await.map_err(|e| Error::HandlerError(e.to_string()))
     }
 
+    #[tracing::instrument(skip_all, fields(block_id = block_id))]
     async fn run_impl(
         &mut self,
         block_id: usize,
@@ -290,6 +292,12 @@ impl<T: Kernel + Send + 'static> TypedBlock<T> {
                 match inbox.next().now_or_never() {
                     Some(Some(BlockMessage::Notify)) => {}
                     Some(Some(BlockMessage::BlockDescription { tx })) => {
+                        let span = tracing::info_span!(
+                            "BlockDescription",
+                            block_id = block_id,
+                            instance_name = meta.instance_name().unwrap()
+                        );
+                        let _enter = span.enter();
                         let stream_inputs: Vec<String> =
                             sio.inputs().iter().map(|x| x.name().to_string()).collect();
                         let stream_outputs: Vec<String> =

@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::task;
 use std::task::Poll;
-
+use tracing::Instrument;
 use crate::runtime;
 use crate::runtime::config;
 use crate::runtime::scheduler::Scheduler;
@@ -336,11 +336,13 @@ impl RuntimeHandle {
     }
 
     /// Get handle to a running flowgraph
+    #[tracing::instrument(skip(self))]
     pub fn get_flowgraph(&self, id: usize) -> Option<FlowgraphHandle> {
         self.flowgraphs.lock().unwrap().get(id).cloned()
     }
 
     /// Get list of flowgraph IDs
+    #[tracing::instrument(skip(self))]
     pub fn get_flowgraphs(&self) -> Vec<usize> {
         self.flowgraphs
             .lock()
@@ -351,6 +353,7 @@ impl RuntimeHandle {
     }
 }
 
+#[tracing::instrument(skip_all)]
 pub(crate) async fn run_flowgraph<S: Scheduler>(
     mut fg: Flowgraph,
     scheduler: S,
@@ -503,6 +506,8 @@ pub(crate) async fn run_flowgraph<S: Scheduler>(
                 data,
                 tx,
             } => {
+                let span = info_span!("run_flowgraph::BlockCall", block_id = block_id, port_id = %port_id);
+                let _span_guard = span.enter();
                 if let Some(inbox) = inboxes[block_id].as_mut() {
                     if inbox
                         .send(BlockMessage::Call { port_id, data })
@@ -523,6 +528,8 @@ pub(crate) async fn run_flowgraph<S: Scheduler>(
                 data,
                 tx,
             } => {
+                let span = info_span!("run_flowgraph::BlockCallback", block_id = block_id, port_id = %port_id);
+                let _span_guard = span.enter();
                 let (block_tx, block_rx) = oneshot::channel::<Result<Pmt, Error>>();
                 if let Some(Some(inbox)) = inboxes.get_mut(block_id) {
                     if inbox
@@ -558,22 +565,25 @@ pub(crate) async fn run_flowgraph<S: Scheduler>(
                 let _ = main_channel.send(FlowgraphMessage::Terminate).await;
             }
             FlowgraphMessage::BlockDescription { block_id, tx } => {
+                let span = info_span!("run_flowgraph::BlockDescription", block_id = block_id);
                 if let Some(Some(ref mut b)) = inboxes.get_mut(block_id) {
                     let (b_tx, rx) = oneshot::channel::<BlockDescription>();
-                    if b.send(BlockMessage::BlockDescription { tx: b_tx })
-                        .await
-                        .is_ok()
-                    {
-                        if let Ok(b) = rx.await {
-                            let _ = tx.send(Ok(b));
+                    async move {
+                        if b.send(BlockMessage::BlockDescription { tx: b_tx })
+                            .await
+                            .is_ok()
+                        {
+                            if let Ok(b) = rx.await {
+                                let _ = tx.send(Ok(b));
+                            } else {
+                                let _ = tx.send(Err(Error::RuntimeError(format!(
+                                    "Block {block_id} terminated or crashed"
+                                ))));
+                            }
                         } else {
-                            let _ = tx.send(Err(Error::RuntimeError(format!(
-                                "Block {block_id} terminated or crashed"
-                            ))));
+                            let _ = tx.send(Err(Error::BlockTerminated));
                         }
-                    } else {
-                        let _ = tx.send(Err(Error::BlockTerminated));
-                    }
+                    }.instrument(span).await;
                 } else {
                     let _ = tx.send(Err(Error::InvalidBlock(block_id)));
                 }
@@ -584,11 +594,14 @@ pub(crate) async fn run_flowgraph<S: Scheduler>(
                 for id in ids {
                     let (b_tx, rx) = oneshot::channel::<BlockDescription>();
                     if let Some(Some(inbox)) = inboxes.get_mut(id) {
+                        let span = info_span!("run_flowgraph::FlowgraphDescription::send", block_id = id);
                         inbox
                             .send(BlockMessage::BlockDescription { tx: b_tx })
+                            .instrument(span)
                             .await
                             .unwrap();
-                        blocks.push(rx.await.unwrap());
+                        let span = info_span!("run_flowgraph::FlowgraphDescription::receive", block_id = id);
+                        blocks.push(rx.instrument(span).await.unwrap());
                     }
                 }
 

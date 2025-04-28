@@ -33,10 +33,12 @@ macro_rules! relative {
     };
 }
 
+#[tracing::instrument(skip(rt))]
 async fn flowgraphs(State(rt): State<RuntimeHandle>) -> Json<Vec<usize>> {
     Json::from(rt.get_flowgraphs())
 }
 
+#[tracing::instrument(skip(rt))]
 async fn flowgraph_description(
     Path(fg): Path<usize>,
     State(rt): State<RuntimeHandle>,
@@ -50,6 +52,7 @@ async fn flowgraph_description(
     Err(StatusCode::BAD_REQUEST)
 }
 
+#[tracing::instrument(skip(rt))]
 async fn block_description(
     Path((fg, blk)): Path<(usize, usize)>,
     State(rt): State<RuntimeHandle>,
@@ -64,6 +67,7 @@ async fn block_description(
     Err(StatusCode::BAD_REQUEST)
 }
 
+#[tracing::instrument(skip(rt))]
 async fn handler_id(
     Path((fg, blk, handler)): Path<(usize, usize, String)>,
     State(rt): State<RuntimeHandle>,
@@ -82,6 +86,7 @@ async fn handler_id(
     Err(StatusCode::BAD_REQUEST)
 }
 
+#[tracing::instrument(skip(rt))]
 async fn handler_id_post(
     Path((fg, blk, handler)): Path<(usize, usize, String)>,
     State(rt): State<RuntimeHandle>,

@@ -141,6 +141,7 @@ impl FlowgraphHandle {
     }
 
     /// Call message handler, ignoring the result
+    #[tracing::instrument(skip_all, fields(block_id = block_id, port_id))]
     pub async fn call(
         &mut self,
         block_id: usize,
@@ -148,10 +149,12 @@ impl FlowgraphHandle {
         data: Pmt,
     ) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel::<Result<(), Error>>();
+        let port_id = port_id.into();
+        tracing::Span::current().record("port_id", port_id.to_string());
         self.inbox
             .send(FlowgraphMessage::BlockCall {
                 block_id,
-                port_id: port_id.into(),
+                port_id,
                 data,
                 tx,
             })
@@ -161,6 +164,7 @@ impl FlowgraphHandle {
     }
 
     /// Call message handler
+    #[tracing::instrument(skip_all, fields(block_id = block_id, port_id))]
     pub async fn callback(
         &mut self,
         block_id: usize,
@@ -168,10 +172,12 @@ impl FlowgraphHandle {
         data: Pmt,
     ) -> Result<Pmt, Error> {
         let (tx, rx) = oneshot::channel::<Result<Pmt, Error>>();
+        let port_id = port_id.into();
+        tracing::Span::current().record("port_id", port_id.to_string());
         self.inbox
             .send(FlowgraphMessage::BlockCallback {
                 block_id,
-                port_id: port_id.into(),
+                port_id,
                 data,
                 tx,
             })
@@ -181,6 +187,7 @@ impl FlowgraphHandle {
     }
 
     /// Get [`FlowgraphDescription`]
+    #[tracing::instrument(skip_all)]
     pub async fn description(&mut self) -> Result<FlowgraphDescription, Error> {
         let (tx, rx) = oneshot::channel::<FlowgraphDescription>();
         self.inbox
@@ -192,6 +199,7 @@ impl FlowgraphHandle {
     }
 
     /// Get [`BlockDescription`]
+    #[tracing::instrument(skip(self))]
     pub async fn block_description(&mut self, block_id: usize) -> Result<BlockDescription, Error> {
         let (tx, rx) = oneshot::channel::<Result<BlockDescription, Error>>();
         self.inbox
